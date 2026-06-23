@@ -1,5 +1,6 @@
 """Regular 52-card deck with no jokers."""
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
 from random import Random
@@ -62,7 +63,10 @@ class RegularCard(Card):
 class RegularDeck(Deck[RegularCard]):
     """A mutable regular 52-card deck."""
 
-    def __init__(self) -> None:
+    def __init__(self, cards: Iterable[RegularCard] | None = None) -> None:
+        if cards is not None:
+            self._cards = list(cards)
+            return
         self._cards = [
             RegularCard(rank=rank, suit=suit)
             for rank in RegularRank

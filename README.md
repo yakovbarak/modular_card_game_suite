@@ -1,9 +1,9 @@
 # Modular Card Game Suite
 
 Modular Card Game Suite is a Python project that will grow into a modular suite
-for card games, decks, local servers, and clients. Sprint 1 establishes the
-domain foundation only: generic card/deck abstractions and a built-in regular
-52-card deck.
+for card games, decks, local servers, and clients. Sprint 2 adds the first pure
+in-memory game implementation: ClownGame, playable and testable through Python
+objects and method calls.
 
 ## Python Version
 
@@ -45,14 +45,12 @@ python -m mypy src
 
 * `engine/`: generic card and deck abstractions shared by deck implementations.
 * `decks/`: built-in deck implementations.
-* `games/`: reserved for future game implementations.
-* `tests/`: automated tests for Sprint 1 behavior.
+* `games/`: pure in-memory game implementations, including ClownGame.
+* `tests/`: automated tests for deck and ClownGame behavior.
 * `docs/`: architecture, backlog, sprint report, and architect handoff notes.
 
-## Sprint 1 Limitations
+## Current Limitations
 
-* No game rules yet.
-* No ClownGame yet.
 * No server/client yet.
 * No external plugins yet.
 * No save/load yet.
