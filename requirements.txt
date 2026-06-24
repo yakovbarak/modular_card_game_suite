@@ -2,3 +2,7 @@ pytest
 pytest-cov
 ruff
 mypy
+fastapi
+uvicorn
+httpx2
+-e .
