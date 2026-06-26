@@ -1,3 +1,7 @@
+from typing import cast
+
+import pytest
+
 from modular_card_game_suite.client import main as client_main
 from modular_card_game_suite.client.api_client import (
     ActionResponse,
@@ -43,7 +47,7 @@ class FakeApiClient:
 
 
 def turn_state(**overrides: object) -> PlayerState:
-    state: PlayerState = {
+    state = {
         "player_id": "player-one-token",
         "display_name": "Yakov (Player 1)",
         "opponent_display_name": "Olga (Player 2)",
@@ -57,8 +61,7 @@ def turn_state(**overrides: object) -> PlayerState:
         "winner_display_name": None,
         "last_opponent_action": None,
     }
-    state.update(overrides)
-    return state
+    return cast(PlayerState, state | overrides)
 
 
 def test_run_client_joins_plays_then_quits_without_prompting_while_waiting() -> None:
@@ -79,8 +82,37 @@ def test_run_client_joins_plays_then_quits_without_prompting_while_waiting() -> 
     assert "You played 9 of Clubs." in output
 
 
+def test_run_client_continues_turn_after_api_rejects_command() -> None:
+    class FirstPlayRejectedApiClient(FakeApiClient):
+        def play_card(self, player_id: str, hand_index: int) -> ActionResponse:
+            assert player_id == "player-one-token"
+            self.play_indexes.append(hand_index)
+            if len(self.play_indexes) == 1:
+                raise ApiError("Illegal move. Card cannot be played.")
+            return {
+                "message": "You played 9 of Clubs.",
+                "state": turn_state(is_your_turn=False),
+            }
+
+    api_client = FirstPlayRejectedApiClient()
+    inputs = iter(["Yakov", "play 1", "play 1", "quit"])
+    output: list[str] = []
+
+    result = run_client(
+        api_client,  # type: ignore[arg-type]
+        input_func=lambda prompt: next(inputs),
+        output_func=output.append,
+        sleep_func=lambda seconds: None,
+    )
+
+    assert result == 0
+    assert api_client.play_indexes == [0, 0]
+    assert "Illegal move. Card cannot be played." in output
+    assert "You played 9 of Clubs." in output
+
+
 def test_main_builds_api_client_with_server_url(
-    monkeypatch: object,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[str] = []
 
