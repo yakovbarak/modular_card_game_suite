@@ -19,3 +19,11 @@
   implementation.
 * Sprint 1 does not include game rules, a server, clients, external plugins,
   save/load behavior, CI, or versioning strategy.
+
+## Approved Sprint 3 Decisions
+
+* The pure game engine is independent from server and client adapters.
+* The FastAPI server is an adapter around the pure ClownGame engine.
+* Sprint 3 supports one active in-memory game session per server process.
+* Common or reusable game classes must live in a common/shared module, not
+  inside a specific game implementation.
