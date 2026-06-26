@@ -7,6 +7,7 @@ from collections.abc import Callable, Sequence
 from modular_card_game_suite.client.api_client import (
     DEFAULT_SERVER_URL,
     ApiClient,
+    ApiError,
     ClientError,
     PlayerState,
 )
@@ -97,13 +98,23 @@ def run_client(
                     output_func(format_hand(state))
                 elif command.name == "play":
                     assert command.hand_index is not None
-                    action = api_client.play_card(player_id, command.hand_index)
-                    output_func(action["message"])
-                    state = action["state"]
+                    try:
+                        action = api_client.play_card(player_id, command.hand_index)
+                    except ApiError as error:
+                        output_func(str(error))
+                        continue
+                    else:
+                        output_func(action["message"])
+                        state = action["state"]
                 elif command.name == "draw":
-                    action = api_client.draw_card(player_id)
-                    output_func(action["message"])
-                    state = action["state"]
+                    try:
+                        action = api_client.draw_card(player_id)
+                    except ApiError as error:
+                        output_func(str(error))
+                        continue
+                    else:
+                        output_func(action["message"])
+                        state = action["state"]
 
                 if state["game_over"]:
                     output_func(format_game_over(state))

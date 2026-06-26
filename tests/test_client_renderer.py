@@ -1,3 +1,5 @@
+from typing import cast
+
 from modular_card_game_suite.client.api_client import PlayerState
 from modular_card_game_suite.client.renderer import (
     format_game_over,
@@ -7,7 +9,7 @@ from modular_card_game_suite.client.renderer import (
 
 
 def player_state(**overrides: object) -> PlayerState:
-    state: PlayerState = {
+    state = {
         "player_id": "player-one-token",
         "display_name": "Yakov (Player 1)",
         "opponent_display_name": "Olga (Player 2)",
@@ -25,8 +27,7 @@ def player_state(**overrides: object) -> PlayerState:
         "winner_display_name": None,
         "last_opponent_action": "Olga drew a card.",
     }
-    state.update(overrides)
-    return state
+    return cast(PlayerState, state | overrides)
 
 
 def test_hand_display_uses_one_based_indexes_and_playable_markers() -> None:

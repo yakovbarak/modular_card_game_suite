@@ -129,11 +129,26 @@ index and verified a legal `play {index}` action.
 * No external plugins yet.
 * Manual live verification did not reach game over.
 
+## 8a. Post-Sprint Bug Fix
+
+After Sprint 4, manual two-client play exposed a bug in the active-turn error
+path: if the active player attempted an illegal `play {index}` and then typed a
+valid `play {index}`, the second command was interpreted by PowerShell instead
+of the client. The root cause was that the CLI treated server-side action
+rejections as fatal `ClientError`s, printed the illegal-move message, and exited
+the process.
+
+The fix keeps action-level `ApiError`s recoverable inside the turn loop. The
+client now prints the server's illegal-move message and continues prompting so
+the player can retry a legal play or draw. A regression test covers an illegal
+play followed by a valid play in the same turn.
+
 ## 9. Risks / Concerns
 
 * Polling is intentionally simple and can feel delayed by up to one second.
 * The client stores the bearer-style opaque player ID only in process memory.
-* The client exits on normal API/client errors rather than attempting reconnect.
+* The client exits on connection/response failures rather than attempting
+  reconnect; server-side action rejections during a turn are now recoverable.
 * The server still has no reset endpoint, so repeated manual sessions require a
   server restart.
 * Dependencies remain unpinned, matching the existing project convention.

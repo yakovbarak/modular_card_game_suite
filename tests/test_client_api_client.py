@@ -1,4 +1,7 @@
 from collections.abc import Iterator
+from email.message import Message
+from io import BytesIO
+from typing import cast
 from urllib.error import HTTPError
 from urllib.request import Request
 
@@ -22,14 +25,6 @@ class FakeResponse:
         return self.body
 
 
-class FakeErrorBody:
-    def read(self) -> bytes:
-        return b'{"detail":"Illegal move. 3 of Spades cannot be played."}'
-
-    def close(self) -> None:
-        return None
-
-
 @pytest.fixture
 def requests_seen(
     monkeypatch: pytest.MonkeyPatch,
@@ -41,7 +36,7 @@ def requests_seen(
             (
                 request.get_method(),
                 request.full_url,
-                request.data,
+                cast(bytes | None, request.data),
             )
         )
         return FakeResponse(response_for(request.full_url))
@@ -141,7 +136,8 @@ def test_server_error_response_becomes_clean_client_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def fake_urlopen(request: Request, timeout: int) -> FakeResponse:
-        raise HTTPError(request.full_url, 400, "Bad Request", {}, FakeErrorBody())
+        body = BytesIO(b'{"detail":"Illegal move. 3 of Spades cannot be played."}')
+        raise HTTPError(request.full_url, 400, "Bad Request", Message(), body)
 
     monkeypatch.setattr(api_client, "urlopen", fake_urlopen)
     client = ApiClient("http://example.test")
