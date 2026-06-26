@@ -54,10 +54,17 @@ Architect, please review Sprint 4 for Modular Card Game Suite and define Sprint
 * Live local server and two scripted terminal clients: passed join, waiting
   polling, turn prompt, hand display, playable marker display, invalid command,
   legal `play {index}`, draw, and automatic turn switch checks.
+* Post-sprint regression: illegal `play {index}` followed by valid
+  `play {index}` remains inside the client turn prompt.
 
 ## Known Issues
 
-* None known within the approved Sprint 4 behavior.
+* Post-sprint manual two-client play found that an illegal active-turn
+  `play {index}` caused the CLI to exit after printing the illegal-move
+  message. The next valid `play {index}` was then interpreted by PowerShell.
+  This branch fixes the issue by treating server-side action `ApiError`s as
+  recoverable inside the turn loop, preserving fatal handling for broader
+  client failures.
 
 ## Risks / Concerns
 
