@@ -27,3 +27,12 @@
 * Sprint 3 supports one active in-memory game session per server process.
 * Common or reusable game classes must live in a common/shared module, not
   inside a specific game implementation.
+
+## Approved Sprint 4 Decisions
+
+* The CLI is an adapter over the server API.
+* The CLI uses HTTP polling for the MVP.
+* Client transport and API calls are encapsulated to allow future replacement.
+* Terminal rendering is separated from transport and command parsing.
+* CLI user-facing card indexes are one-based, while server/API indexes are
+  zero-based.
