@@ -103,10 +103,12 @@ def test_blank_player_name_is_rejected_as_json(client: TestClient) -> None:
 def test_second_player_starts_game_and_duplicate_names_are_allowed(
     client: TestClient,
 ) -> None:
-    first = client.post("/players", json={"name": "Yakov"}).json()
+    waiting_join = client.post("/players", json={"name": "Yakov"}).json()
+
+    assert waiting_join["game_started"] is False
+
     second_response = client.post("/players", json={"name": "Yakov"})
 
-    assert first["game_started"] is False
     assert second_response.status_code == 201
     assert second_response.json() == {
         "player_id": "player-two-token",
