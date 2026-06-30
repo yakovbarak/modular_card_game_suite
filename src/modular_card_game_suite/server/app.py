@@ -25,6 +25,7 @@ from modular_card_game_suite.server.models import (
     JoinPlayerResponse,
     PlayCardRequest,
     PlayerStateResponse,
+    SessionResetResponse,
 )
 from modular_card_game_suite.server.session import (
     GameNotReadyError,
@@ -57,6 +58,15 @@ def create_app(
     @app.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:
         return HealthResponse(status="ok")
+
+    @app.post("/session/reset", response_model=SessionResetResponse)
+    def reset_session() -> SessionResetResponse:
+        active_session.reset()
+        app.state.logger.info("Session reset requested.")
+        return SessionResetResponse(
+            status="reset",
+            message="Session reset. New players may now join.",
+        )
 
     @app.post(
         "/players",
