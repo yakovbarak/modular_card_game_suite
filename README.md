@@ -1,7 +1,7 @@
 # Modular Card Game Suite
 
 Modular Card Game Suite is a Python project that will grow into a modular suite
-for card games, decks, local servers, and clients. Sprint 4 provides a
+for card games, decks, local servers, and clients. Sprint 5 hardens a
 terminal-based ClownGame MVP with one local FastAPI server process and two
 terminal clients using HTTP polling.
 
@@ -20,7 +20,9 @@ python -m pip install -r requirements.txt
 The requirements install the project in editable mode so module entry points
 work directly from the repository.
 
-## Start the Server
+## Run the MVP Demo
+
+### 1. Start the Server
 
 The server listens on `http://127.0.0.1:8000` by default:
 
@@ -45,16 +47,34 @@ a zero-based hand index, and drawing a card. It can be exercised with the
 automated tests, the terminal client, or manual HTTP tools such as PowerShell's
 `Invoke-RestMethod`.
 
-## Start Two Terminal Clients
+The MVP server holds exactly one in-memory game session. Restart the server when
+you want a fresh game.
 
-Start the server first, then open two separate terminal windows and run:
+### 2. Start Client 1
+
+Open a second terminal window and run:
 
 ```powershell
 python -m modular_card_game_suite.client
 ```
 
+Enter a player name when prompted. Client 1 joins the active session and waits
+until a second player joins.
+
+### 3. Start Client 2
+
+Open a third terminal window and run:
+
+```powershell
+python -m modular_card_game_suite.client
+```
+
+Enter a second player name. The game starts automatically after Client 2 joins.
+One terminal enters turn mode, and the other terminal stays in waiting mode
+until the turn switches.
+
 The client connects to `http://127.0.0.1:8000` by default. Override the server
-URL when the server uses a different port:
+URL in either client when the server uses a different port:
 
 ```powershell
 python -m modular_card_game_suite.client --server-url http://127.0.0.1:8001
@@ -70,12 +90,15 @@ During your turn, the client shows `Play your turn >` and accepts:
 * `status`: show the current top card, draw deck count, opponent card count,
   opponent last action, and game-over status.
 * `hand`: show your hand with one-based indexes and playable markers.
-* `play {index}`: play a one-based hand index such as `play 1`.
+* `play {index}`: play a one-based hand index such as `play 1`. The client
+  translates this to the server API's zero-based index.
 * `draw`: draw a card or skip if no cards are available.
 * `quit`: exit the client.
 
-The CLI uses one-based card indexes for players. The server API still uses
-zero-based hand indexes.
+Illegal commands and illegal moves are recoverable during turn mode. The client
+shows the error and keeps the player at the turn prompt so another command can
+be tried. Fatal errors, such as an unreachable server or an invalid unexpected
+server response, still exit cleanly.
 
 ## Tests
 
@@ -115,8 +138,11 @@ python -m mypy src
 ## Current Limitations
 
 * Exactly one active in-memory game session per server process.
+* Restart the server for a fresh game; there is no reset command in the MVP.
 * No reconnect/resume.
 * No save/load.
+* Run the server as one Uvicorn worker/process because session state is held in
+  process memory.
 * Local polling only; no WebSockets yet.
 * No external plugins yet.
 * No CI yet.
