@@ -1,9 +1,10 @@
 # Modular Card Game Suite
 
 Modular Card Game Suite is a Python project that will grow into a modular suite
-for card games, decks, local servers, and clients. Sprint 5 hardens a
-terminal-based ClownGame MVP with one local FastAPI server process and two
-terminal clients using HTTP polling.
+for card games, decks, local servers, and clients. The current MVP provides a
+terminal-based ClownGame with one local FastAPI server process, two terminal
+clients using HTTP polling, session reset, and a minimal reusable game
+interface for future game implementations.
 
 ## Python Version
 
@@ -148,7 +149,8 @@ python -m mypy src
 
 * `engine/`: generic card and deck abstractions shared by deck implementations.
 * `decks/`: built-in deck implementations.
-* `games/`: pure in-memory game implementations, including ClownGame.
+* `games/`: shared game-domain models, the minimal game interface, and pure
+  in-memory game implementations including ClownGame.
 * `server/`: FastAPI adapter and one active in-memory game session.
 * `client/`: terminal CLI adapter, HTTP API client, command parser, and
   renderer.
