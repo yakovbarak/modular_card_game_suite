@@ -43,7 +43,22 @@
 * Server-side action rejections for `play` and `draw` are user-facing client
   errors during active turn mode and should allow the player to retry.
 * The MVP uses one active in-memory server session per process.
-* A fresh game requires restarting the server process.
 * The MVP does not support reconnect or resume.
 * The server should run as a single Uvicorn worker/process because session state
   is held in process memory.
+
+## Approved Sprint 6 Decisions
+
+* The server supports resetting the single in-memory MVP session.
+* Session reset returns the server to an empty pre-game state without killing or
+  restarting the process.
+* Reset clears registered players, player IDs, current game state, and public
+  event/session state held by the active in-memory game.
+* Old player IDs become invalid after reset and are rejected by state and action
+  endpoints.
+* New players may join after reset, and a new ClownGame starts normally when the
+  second new player joins.
+* Reset is a local MVP/demo convenience, not authenticated production admin
+  functionality.
+* Reset does not provide save/load, reconnect/resume, multiple sessions,
+  WebSockets, authentication, or an admin UI.

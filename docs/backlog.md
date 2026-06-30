@@ -7,7 +7,6 @@
 * Add save/load later.
 * Add reconnect/resume later.
 * Add multiple sessions per server later.
-* Add session reset later.
 * Add external plugin loading later.
 * Add versioning strategy later.
 * Add CI later.
