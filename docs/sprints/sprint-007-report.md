@@ -2,16 +2,16 @@
 
 ## Sprint Summary
 
-Sprint 7 introduced a minimal reusable game interface in the shared game-domain
-layer. The new boundary defines `Game`, `GameView`, `GameAction`,
-`GameActionResult`, and `GameError` in `games/common.py`. ClownGame now conforms
-to the protocol and implements `submit_action()` for the existing `play_card`
-and `draw_card` actions while preserving its direct rule methods.
+Sprint 7 added a minimal reusable game interface boundary without changing the
+MVP's user-facing ClownGame behavior. Shared game-domain types now include a
+small `Game` protocol, `GameView` protocol, generic `GameAction`,
+`GameActionResult`, and shared `GameError` base. ClownGame conforms to this
+boundary and interprets adapter-facing `play_card` and `draw_card` actions.
 
-The FastAPI server API remains unchanged. The server session now translates the
-existing ClownGame-shaped HTTP endpoints into internal `GameAction` requests.
-CLI behavior, session reset behavior, and user-facing response payloads remain
-unchanged.
+The FastAPI session still constructs ClownGame directly for the MVP, but it now
+translates the existing ClownGame-shaped HTTP endpoints into internal
+`GameAction` requests. CLI commands, server routes, session reset behavior, and
+response payloads remain unchanged.
 
 ## Definition of Done Checklist
 
@@ -23,7 +23,8 @@ unchanged.
 * common reusable concepts are not placed inside `games/clown_game/`: done
 * game-specific ClownGame concepts remain inside ClownGame modules: done
 * server still works with ClownGame: done
-* CLI still works with server: partially done
+* CLI still works with server: done by automated client tests and server/API
+  manual verification
 * session reset still works: done
 * existing user-facing behavior is preserved: done
 * future host-or-join flow is not implemented but is not blocked by the design:
@@ -38,41 +39,39 @@ unchanged.
 
 ## File-Change Summary
 
-* `src/modular_card_game_suite/games/common.py`: added the minimal shared game
-  protocol, action model, action result, view protocol, and `GameError` base.
-* `src/modular_card_game_suite/games/clown_game/game.py`: added
-  `submit_action()` and typed action payload validation while preserving
-  `play_card()` and `draw_card()`.
-* `src/modular_card_game_suite/games/clown_game/errors.py`: made
-  `ClownGameError` inherit from `GameError` and added
-  `InvalidGameActionError`.
-* `src/modular_card_game_suite/games/__init__.py`: exported shared game
+* `src/modular_card_game_suite/games/common.py`: added shared `GameError`,
+  `GameAction`, `GameView`, `GameActionResult`, and `Game` protocol.
+* `src/modular_card_game_suite/games/__init__.py`: exported the shared
   interface types.
+* `src/modular_card_game_suite/games/clown_game/errors.py`: made
+  `ClownGameError` inherit from shared `GameError` and added
+  `InvalidGameActionError`.
+* `src/modular_card_game_suite/games/clown_game/game.py`: added
+  `submit_action()` and payload validation for `play_card` and `draw_card`.
 * `src/modular_card_game_suite/games/clown_game/__init__.py`: exported
   `InvalidGameActionError`.
-* `src/modular_card_game_suite/server/session.py`: translated existing play and
-  draw endpoint behavior into internal `GameAction` submissions.
-* `tests/test_game_interface.py`: added interface/protocol behavior tests.
-* `README.md`: clarified that `games/` now includes the minimal game interface.
-* `docs/architecture.md`: documented approved Sprint 7 decisions.
-* `docs/backlog.md`: added approved roadmap backlog items.
-* `docs/sprints/sprint-007-report.md`: added this report.
-* `docs/sprints/sprint-007-architect-handoff.md`: added architect handoff.
+* `src/modular_card_game_suite/server/session.py`: typed the active game behind
+  the shared `Game[PlayerView]` protocol and translated play/draw endpoints into
+  `GameAction` requests.
+* `tests/test_game_interface.py`: added protocol, action, view, typed-error,
+  and game-over interface coverage.
+* `docs/architecture.md`: documented Sprint 7 interface and boundary decisions.
+* `docs/backlog.md`: added approved roadmap/backlog items.
+* `README.md`: clarified the MVP now has reset plus a minimal reusable game
+  interface.
 
 ## Tests Added/Changed
 
-* Added coverage that ClownGame conforms to the runtime-checkable `Game`
-  protocol.
-* Added coverage that ClownGame errors inherit from the shared `GameError`.
-* Added coverage that an adapter can get player-specific state through the
-  interface.
-* Added coverage that an adapter can submit valid `play_card` and `draw_card`
-  actions through the interface.
-* Added coverage that invalid interface actions raise clear typed errors.
-* Added coverage that game-over state and winner visibility are available
-  through the interface.
-* Existing server tests continue to cover ClownGame-shaped endpoints and session
-  reset behavior.
+* Added coverage that ClownGame conforms to the shared game protocol.
+* Added coverage that ClownGame errors derive from shared `GameError`.
+* Added coverage that adapters can retrieve a player-specific view through the
+  `Game` interface.
+* Added coverage for valid `play_card` and `draw_card` actions through
+  `submit_action()`.
+* Added coverage that unsupported action types and invalid action payloads raise
+  `InvalidGameActionError`.
+* Added coverage that game-over status and winner state are visible through the
+  interface result view.
 
 ## Commands Run and Results
 
@@ -83,79 +82,85 @@ unchanged.
 
 ## Coverage Milestone Status
 
-Total coverage is 95%. The new shared interface module reports 100% coverage.
-Server session, server app, server models, and logging remain at 100% coverage.
+Total coverage is 95%. The new shared game interface module reports 100%
+coverage, and the server session remains at 100% coverage after the adapter
+translation refactor.
 
 ## Manual Verification Checklist
 
-Manual verification with a real local server process used:
+Manual verification used real local server processes with:
 
 ```powershell
-python -m modular_card_game_suite.server --port 8017
+python -m modular_card_game_suite.server --port 8765
+python -m modular_card_game_suite.server --port 8766
 ```
 
-HTTP calls were made with PowerShell `Invoke-RestMethod`.
+HTTP calls were made with PowerShell `Invoke-RestMethod` against the same API
+surface used by the CLI client.
 
 * server starts and `/health` returns ok: done
-* two players can join: done
-* game starts after the second player joins: done
-* player state exposes hand data: done
-* illegal play is rejected cleanly: done
-* draw works: done
-* draw switches turn: done
-* legal play works after the turn switch: done
-* `POST /session/reset` still works: done
+* both clients/players join: done
+* game starts: done
+* one player is in turn mode: done
+* other player waits: done
+* `hand`-equivalent player state works: done
+* `play {index}` equivalent works through `POST /actions/play`: done
+* `draw` works through `POST /actions/draw`: done
+* illegal move remains recoverable: done, wrong-turn draw returned 409 without
+  corrupting session state
+* turn switches after action: done
+* `POST /session/reset` clears the current session: done
 * old player IDs are invalid after reset: done
 * new players can join after reset: done
-* new game starts after reset: done
-* `logs/server.log` contains the reset event: done
-
-Full two-interactive-client manual verification was not completed in this
-non-interactive environment. CLI behavior is covered by the existing automated
-client tests, including command parsing, one-based indexes, recoverable illegal
-commands/actions, game-over handling, and reset invalidation handling.
-
-Reusable/common placement was manually reviewed: the new interface types and
-existing reusable game-domain models live in `games/common.py`; ClownGame-only
-rules and action interpretation remain under `games/clown_game/`.
+* a new game starts normally after reset: done
+* existing clients invalidated by reset exit cleanly: done by automated CLI
+  regression tests
+* fully interactive two-terminal CLI run: partially done; not directly driven in
+  this shell, but CLI command parsing, rendering, retry behavior, reset
+  invalidation, and API client behavior are covered by automated tests
 
 ## Known Limitations
 
-* The server API remains ClownGame-shaped for MVP compatibility.
-* The server still constructs ClownGame directly; no game registry or plugin
-  dispatch was added.
-* Host-or-join launcher flow is not implemented in Sprint 7.
+* The server still constructs ClownGame directly for the MVP.
+* The public HTTP API remains ClownGame-shaped for compatibility.
+* The generic view boundary intentionally exposes only common adapter signals;
+  ClownGame-specific fields remain on `PlayerView`.
+* Fully interactive two-terminal manual CLI verification was not completed in
+  this shell.
 
 ## Risks / Concerns
 
-* `PlayerView` still contains ClownGame-specific fields because the current MVP
-  API and CLI depend on them. The generic `GameView` protocol intentionally
-  exposes only the common subset.
-* Future games may need their own view models and action payload conventions.
-  Sprint 7 keeps that flexible instead of creating a broad registry too early.
+* `GameAction` payloads are intentionally generic mappings. Future games should
+  validate payloads at their own boundary and keep errors typed.
+* If the next game needs a different player-count model or different session
+  lifecycle, Sprint 8+ should keep that orchestration in an application/session
+  layer rather than adding launcher concepts to game rules.
 
 ## Proposed Backlog Items
 
-* None.
+* Consider a small game factory or registry only when a second game is actually
+  introduced.
+* Consider structured event payloads when GUI requirements are clearer.
 
 ## Proposed Architecture Document Changes
 
-* Completed the approved Sprint 7 game-interface notes in
-  `docs/architecture.md`.
+* Completed the approved Sprint 7 notes in `docs/architecture.md`.
 
 ## Questions for Architect/User
 
-* None.
+* Should Sprint 8 keep the server session ClownGame-specific until Sprint 11, or
+  introduce a small game selection/factory boundary as part of host-or-join?
 
 ## How to Review This PR
 
-1. Review the shared interface types in `games/common.py`.
-2. Review ClownGame's `submit_action()` implementation and
-   `InvalidGameActionError`.
-3. Review `GameSession.play()` and `GameSession.draw()` to confirm HTTP
-   compatibility is preserved.
-4. Review `tests/test_game_interface.py` for the new protocol coverage.
-5. Review Sprint 7 architecture/backlog documentation.
+1. Review the shared boundary in `src/modular_card_game_suite/games/common.py`.
+2. Review ClownGame's `submit_action()` implementation and typed errors.
+3. Review `GameSession.play()` and `GameSession.draw()` to confirm the public
+   API remains unchanged while using the new action boundary internally.
+4. Review `tests/test_game_interface.py` for interface behavior and regression
+   intent.
+5. Review `docs/architecture.md`, `docs/backlog.md`, and README wording for
+   scope accuracy.
 6. Run `python -m pytest`, `python -m pytest --cov=src`,
    `python -m ruff check .`, and `python -m mypy src`.
 
