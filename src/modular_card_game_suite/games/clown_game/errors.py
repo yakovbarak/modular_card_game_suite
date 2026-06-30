@@ -1,7 +1,9 @@
 """Domain errors for ClownGame."""
 
+from modular_card_game_suite.games.common import GameError
 
-class ClownGameError(Exception):
+
+class ClownGameError(GameError):
     """Base error for ClownGame rule and state violations."""
 
 
@@ -31,3 +33,7 @@ class InvalidCardIndexError(ClownGameError):
 
 class IllegalMoveError(ClownGameError):
     """Raised when a player attempts a rule-illegal move."""
+
+
+class InvalidGameActionError(ClownGameError):
+    """Raised when an adapter action cannot be interpreted by ClownGame."""

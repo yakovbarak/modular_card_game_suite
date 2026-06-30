@@ -6,6 +6,7 @@ from threading import RLock
 from uuid import uuid4
 
 from modular_card_game_suite.games.clown_game import ClownGame
+from modular_card_game_suite.games.common import Game, GameAction, PlayerView
 from modular_card_game_suite.server.models import (
     ActionResponse,
     HandCardResponse,
@@ -45,7 +46,7 @@ class GameSession:
 
     def __init__(
         self,
-        game_factory: Callable[[], ClownGame] = ClownGame,
+        game_factory: Callable[[], Game[PlayerView]] = ClownGame,
         id_factory: Callable[[], str] = lambda: uuid4().hex,
     ) -> None:
         self._game_factory = game_factory
@@ -53,7 +54,7 @@ class GameSession:
         self._lock = RLock()
         self._players: list[SessionPlayer] = []
         self._players_by_id: dict[str, SessionPlayer] = {}
-        self.game: ClownGame | None = None
+        self.game: Game[PlayerView] | None = None
 
     @property
     def game_started(self) -> bool:
@@ -113,15 +114,13 @@ class GameSession:
         with self._lock:
             player = self._get_player(player_id)
             game = self._require_game()
-            played_card = game.play_card(player.player_index, hand_index)
-            message = (
-                "You Won!!!"
-                if game.winner_index == player.player_index
-                else f"You played {played_card.display_name}."
+            action_result = game.submit_action(
+                player.player_index,
+                GameAction("play_card", {"hand_index": hand_index}),
             )
             return ActionResponse(
-                message=message,
-                state=self._started_state(player),
+                message=action_result.message,
+                state=self._started_state_from_view(player, action_result.view),
             )
 
     def draw(self, player_id: str) -> ActionResponse:
@@ -130,15 +129,13 @@ class GameSession:
         with self._lock:
             player = self._get_player(player_id)
             game = self._require_game()
-            drawn_card = game.draw_card(player.player_index)
-            message = (
-                "No cards available to draw. Your turn was skipped."
-                if drawn_card is None
-                else f"You drew {drawn_card.display_name} from the deck."
+            action_result = game.submit_action(
+                player.player_index,
+                GameAction("draw_card"),
             )
             return ActionResponse(
-                message=message,
-                state=self._started_state(player),
+                message=action_result.message,
+                state=self._started_state_from_view(player, action_result.view),
             )
 
     def _get_player(self, player_id: str) -> SessionPlayer:
@@ -147,7 +144,7 @@ class GameSession:
         except KeyError as error:
             raise UnknownPlayerError("Unknown player ID.") from error
 
-    def _require_game(self) -> ClownGame:
+    def _require_game(self) -> Game[PlayerView]:
         if self.game is None:
             raise GameNotReadyError(
                 "The game has not started. Waiting for a second player."
@@ -183,6 +180,13 @@ class GameSession:
     def _started_state(self, player: SessionPlayer) -> PlayerStateResponse:
         game = self._require_game()
         view = game.get_player_view(player.player_index)
+        return self._started_state_from_view(player, view)
+
+    def _started_state_from_view(
+        self,
+        player: SessionPlayer,
+        view: PlayerView,
+    ) -> PlayerStateResponse:
         return PlayerStateResponse(
             player_id=player.player_id,
             display_name=view.own_display_name,
