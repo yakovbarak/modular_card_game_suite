@@ -36,3 +36,14 @@
 * Terminal rendering is separated from transport and command parsing.
 * CLI user-facing card indexes are one-based, while server/API indexes are
   zero-based.
+
+## Approved Sprint 5 Hardening Clarifications
+
+* Recoverable active-turn command errors must not exit the CLI turn loop.
+* Server-side action rejections for `play` and `draw` are user-facing client
+  errors during active turn mode and should allow the player to retry.
+* The MVP uses one active in-memory server session per process.
+* A fresh game requires restarting the server process.
+* The MVP does not support reconnect or resume.
+* The server should run as a single Uvicorn worker/process because session state
+  is held in process memory.

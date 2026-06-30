@@ -17,6 +17,7 @@ class FakeApiClient:
 
     def __init__(self) -> None:
         self.play_indexes: list[int] = []
+        self.draw_calls = 0
 
     def health_check(self) -> bool:
         return True
@@ -109,6 +110,100 @@ def test_run_client_continues_turn_after_api_rejects_command() -> None:
     assert api_client.play_indexes == [0, 0]
     assert "Illegal move. Card cannot be played." in output
     assert "You played 9 of Clubs." in output
+
+
+@pytest.mark.parametrize(
+    ("bad_command", "expected_error"),
+    [
+        ("play 0", "Invalid card index. Type hand to see your cards."),
+        ("dance", "Unknown command. Type help for available commands."),
+    ],
+)
+def test_run_client_continues_turn_after_parse_error(
+    bad_command: str,
+    expected_error: str,
+) -> None:
+    api_client = FakeApiClient()
+    inputs = iter(["Yakov", bad_command, "play 1", "quit"])
+    output: list[str] = []
+
+    result = run_client(
+        api_client,  # type: ignore[arg-type]
+        input_func=lambda prompt: next(inputs),
+        output_func=output.append,
+        sleep_func=lambda seconds: None,
+    )
+
+    assert result == 0
+    assert api_client.play_indexes == [0]
+    assert expected_error in output
+    assert "You played 9 of Clubs." in output
+
+
+def test_run_client_continues_turn_after_api_rejects_draw() -> None:
+    class FirstDrawRejectedApiClient(FakeApiClient):
+        def draw_card(self, player_id: str) -> ActionResponse:
+            assert player_id == "player-one-token"
+            self.draw_calls += 1
+            if self.draw_calls == 1:
+                raise ApiError("It is not your turn.")
+            return {
+                "message": "You drew 7 of Spades from the deck.",
+                "state": turn_state(is_your_turn=False),
+            }
+
+    api_client = FirstDrawRejectedApiClient()
+    inputs = iter(["Yakov", "draw", "draw", "quit"])
+    output: list[str] = []
+
+    result = run_client(
+        api_client,  # type: ignore[arg-type]
+        input_func=lambda prompt: next(inputs),
+        output_func=output.append,
+        sleep_func=lambda seconds: None,
+    )
+
+    assert result == 0
+    assert api_client.draw_calls == 2
+    assert "It is not your turn." in output
+    assert "You drew 7 of Spades from the deck." in output
+
+
+def test_run_client_draw_switches_from_turn_mode_to_waiting_mode() -> None:
+    class DrawThenWaitApiClient(FakeApiClient):
+        def __init__(self) -> None:
+            super().__init__()
+            self.waiting_state_returned = False
+
+        def get_state(self, player_id: str) -> PlayerState:
+            if self.draw_calls == 0 or self.waiting_state_returned:
+                return turn_state()
+            self.waiting_state_returned = True
+            return turn_state(is_your_turn=False)
+
+        def draw_card(self, player_id: str) -> ActionResponse:
+            self.draw_calls += 1
+            return {
+                "message": "You drew 7 of Spades from the deck.",
+                "state": turn_state(is_your_turn=False),
+            }
+
+    api_client = DrawThenWaitApiClient()
+    inputs = iter(["Yakov", "draw", "quit"])
+    output: list[str] = []
+    sleeps: list[float] = []
+
+    result = run_client(
+        api_client,  # type: ignore[arg-type]
+        input_func=lambda prompt: next(inputs),
+        output_func=output.append,
+        sleep_func=sleeps.append,
+    )
+
+    assert result == 0
+    assert "You drew 7 of Spades from the deck." in output
+    assert "Waiting for opponent..." in output
+    assert sleeps == [1]
 
 
 def test_main_builds_api_client_with_server_url(
