@@ -245,6 +245,45 @@ def test_run_client_exits_cleanly_when_server_is_unreachable() -> None:
     ]
 
 
+def test_run_client_exits_cleanly_when_waiting_session_is_reset() -> None:
+    class ResetWhileWaitingApiClient(FakeApiClient):
+        def get_state(self, player_id: str) -> PlayerState:
+            raise ApiError("Unknown player ID.")
+
+    output: list[str] = []
+
+    result = run_client(
+        ResetWhileWaitingApiClient(),  # type: ignore[arg-type]
+        input_func=lambda prompt: "Yakov",
+        output_func=output.append,
+        sleep_func=lambda seconds: None,
+    )
+
+    assert result == 1
+    assert output == [
+        "Joined as Yakov (Player 1).",
+        client_main.SESSION_INVALID_MESSAGE,
+    ]
+
+
+def test_run_client_exits_cleanly_when_active_session_is_reset() -> None:
+    class ResetWhileActiveApiClient(FakeApiClient):
+        def play_card(self, player_id: str, hand_index: int) -> ActionResponse:
+            raise ApiError("Unknown player ID.")
+
+    output: list[str] = []
+    inputs = iter(["Yakov", "play 1"])
+
+    result = run_client(
+        ResetWhileActiveApiClient(),  # type: ignore[arg-type]
+        input_func=lambda prompt: next(inputs),
+        output_func=output.append,
+    )
+
+    assert result == 1
+    assert output[-1] == client_main.SESSION_INVALID_MESSAGE
+
+
 def test_run_client_prints_join_error_cleanly() -> None:
     class JoinRejectedApiClient(FakeApiClient):
         def join_player(self, name: str) -> JoinResponse:

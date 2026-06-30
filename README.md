@@ -47,8 +47,26 @@ a zero-based hand index, and drawing a card. It can be exercised with the
 automated tests, the terminal client, or manual HTTP tools such as PowerShell's
 `Invoke-RestMethod`.
 
-The MVP server holds exactly one in-memory game session. Restart the server when
-you want a fresh game.
+The MVP server holds exactly one in-memory game session. Reset the session when
+you want a fresh game without restarting the server process:
+
+```powershell
+Invoke-RestMethod -Method Post http://127.0.0.1:8000/session/reset
+```
+
+The response is JSON:
+
+```json
+{
+  "status": "reset",
+  "message": "Session reset. New players may now join."
+}
+```
+
+Session reset is a local MVP/demo convenience. It clears the current in-memory
+players and game state, and old player IDs become invalid. Existing terminal
+clients should be restarted after a reset. Reset is not save/load, reconnect,
+resume, authentication, or multiple-session support.
 
 ### 2. Start Client 1
 
@@ -98,7 +116,9 @@ During your turn, the client shows `Play your turn >` and accepts:
 Illegal commands and illegal moves are recoverable during turn mode. The client
 shows the error and keeps the player at the turn prompt so another command can
 be tried. Fatal errors, such as an unreachable server or an invalid unexpected
-server response, still exit cleanly.
+server response, still exit cleanly. If the server session is reset while a
+client is running, the old player ID becomes invalid; the client shows a clean
+restart message and exits.
 
 ## Tests
 
@@ -138,7 +158,8 @@ python -m mypy src
 ## Current Limitations
 
 * Exactly one active in-memory game session per server process.
-* Restart the server for a fresh game; there is no reset command in the MVP.
+* Session reset clears the one in-memory MVP session but does not preserve or
+  resume existing clients.
 * No reconnect/resume.
 * No save/load.
 * Run the server as one Uvicorn worker/process because session state is held in

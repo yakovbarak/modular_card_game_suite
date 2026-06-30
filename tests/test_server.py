@@ -21,7 +21,16 @@ def card(rank: RegularRank, suit: RegularSuit) -> RegularCard:
 
 
 def deterministic_session() -> GameSession:
-    player_ids: Iterator[str] = iter(("player-one-token", "player-two-token"))
+    player_ids: Iterator[str] = iter(
+        (
+            "player-one-token",
+            "player-two-token",
+            "player-three-token",
+            "player-four-token",
+            "player-five-token",
+            "player-six-token",
+        )
+    )
     return GameSession(
         game_factory=lambda: ClownGame(seed=42),
         id_factory=lambda: next(player_ids),
@@ -51,6 +60,110 @@ def test_health_returns_ok(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_reset_endpoint_returns_success_before_players_join(
+    client: TestClient,
+) -> None:
+    response = client.post("/session/reset")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.json() == {
+        "status": "reset",
+        "message": "Session reset. New players may now join.",
+    }
+
+
+def test_reset_after_one_player_allows_clean_first_join_again(
+    client: TestClient,
+) -> None:
+    old_join = client.post("/players", json={"name": "Alice"}).json()
+
+    reset_response = client.post("/session/reset")
+    new_join_response = client.post("/players", json={"name": "Carol"})
+
+    assert reset_response.status_code == 200
+    assert client.get(f"/players/{old_join['player_id']}/state").status_code == 404
+    assert new_join_response.status_code == 201
+    assert new_join_response.json() == {
+        "player_id": "player-two-token",
+        "display_name": "Carol (Player 1)",
+        "player_index": 0,
+        "game_started": False,
+    }
+
+
+def test_reset_after_started_game_invalidates_old_players_and_starts_new_game(
+    client: TestClient,
+    session: GameSession,
+) -> None:
+    old_first, old_second = join_two_players(client)
+    game = session.game
+    assert game is not None
+    game.current_player_index = 0
+    game.current_face_up_card = card(RegularRank.SEVEN, RegularSuit.HEARTS)
+    game.players[0].hand = [card(RegularRank.THREE, RegularSuit.HEARTS)]
+    assert client.post(
+        f"/players/{old_first['player_id']}/actions/play",
+        json={"hand_index": 0},
+    ).status_code == 200
+
+    reset_response = client.post("/session/reset")
+    stale_state = client.get(f"/players/{old_first['player_id']}/state")
+    stale_play = client.post(
+        f"/players/{old_first['player_id']}/actions/play",
+        json={"hand_index": 0},
+    )
+    stale_draw = client.post(f"/players/{old_second['player_id']}/actions/draw")
+    new_first = client.post("/players", json={"name": "Dana"})
+    new_second = client.post("/players", json={"name": "Eli"})
+
+    assert reset_response.status_code == 200
+    assert session.game is not None
+    assert stale_state.status_code == 404
+    assert stale_play.status_code == 404
+    assert stale_draw.status_code == 404
+    assert new_first.status_code == 201
+    assert new_first.json() == {
+        "player_id": "player-three-token",
+        "display_name": "Dana (Player 1)",
+        "player_index": 0,
+        "game_started": False,
+    }
+    assert new_second.status_code == 201
+    assert new_second.json() == {
+        "player_id": "player-four-token",
+        "display_name": "Eli (Player 2)",
+        "player_index": 1,
+        "game_started": True,
+    }
+
+    new_state = client.get("/players/player-three-token/state").json()
+    assert new_state["display_name"] == "Dana (Player 1)"
+    assert new_state["opponent_display_name"] == "Eli (Player 2)"
+    assert new_state["game_started"] is True
+    assert new_state["last_opponent_action"] is None
+    assert new_state["current_face_up_card"] != "3 of Hearts"
+    assert "Alice" not in str(new_state)
+    assert "Bob" not in str(new_state)
+
+
+def test_reset_clears_third_player_rejection_and_duplicate_names_stay_clean(
+    client: TestClient,
+) -> None:
+    join_two_players(client)
+    rejected_before_reset = client.post("/players", json={"name": "Carol"})
+
+    client.post("/session/reset")
+    first = client.post("/players", json={"name": "Yakov"})
+    second = client.post("/players", json={"name": "Yakov"})
+
+    assert rejected_before_reset.status_code == 409
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json()["display_name"] == "Yakov (Player 1)"
+    assert second.json()["display_name"] == "Yakov (Player 2)"
 
 
 def test_server_entrypoint_defaults_and_accepts_custom_port(
@@ -315,6 +428,7 @@ def test_logging_overwrites_file_and_records_server_events(tmp_path: Path) -> No
         client.post("/players", json={"name": "Alice"})
         client.post("/players", json={"name": "Bob"})
         client.post("/players/not-a-player/actions/draw")
+        client.post("/session/reset")
 
     log_content = log_path.read_text(encoding="utf-8")
     assert "old log content" not in log_content
@@ -322,4 +436,5 @@ def test_logging_overwrites_file_and_records_server_events(tmp_path: Path) -> No
     assert "Player joined" in log_content
     assert "Game started" in log_content
     assert "Draw rejected" in log_content
+    assert "Session reset requested." in log_content
     assert "Server shutdown" in log_content

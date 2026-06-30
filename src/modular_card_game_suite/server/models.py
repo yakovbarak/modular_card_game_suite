@@ -68,3 +68,10 @@ class HealthResponse(BaseModel):
     """Health check payload."""
 
     status: str
+
+
+class SessionResetResponse(BaseModel):
+    """Result of resetting the active in-memory session."""
+
+    status: str
+    message: str

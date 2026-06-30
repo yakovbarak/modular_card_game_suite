@@ -25,6 +25,10 @@ from modular_card_game_suite.client.renderer import (
 )
 
 POLL_INTERVAL_SECONDS = 1
+SESSION_INVALID_MESSAGE = (
+    "Your session is no longer valid. The server may have been reset. "
+    "Please restart the client."
+)
 
 InputFunc = Callable[[str], str]
 OutputFunc = Callable[[str], None]
@@ -101,6 +105,8 @@ def run_client(
                     try:
                         action = api_client.play_card(player_id, command.hand_index)
                     except ApiError as error:
+                        if _is_session_invalid(error):
+                            raise ClientError(SESSION_INVALID_MESSAGE) from error
                         output_func(str(error))
                         continue
                     else:
@@ -110,6 +116,8 @@ def run_client(
                     try:
                         action = api_client.draw_card(player_id)
                     except ApiError as error:
+                        if _is_session_invalid(error):
+                            raise ClientError(SESSION_INVALID_MESSAGE) from error
                         output_func(str(error))
                         continue
                     else:
@@ -135,10 +143,19 @@ def _wait_for_turn(
 ) -> PlayerState:
     waiting_message_printed = False
     while True:
-        state = api_client.get_state(player_id)
+        try:
+            state = api_client.get_state(player_id)
+        except ApiError as error:
+            if _is_session_invalid(error):
+                raise ClientError(SESSION_INVALID_MESSAGE) from error
+            raise
         if state["game_over"] or state["is_your_turn"]:
             return state
         if not waiting_message_printed:
             output_func(format_waiting())
             waiting_message_printed = True
         sleep_func(poll_interval_seconds)
+
+
+def _is_session_invalid(error: ApiError) -> bool:
+    return str(error) == "Unknown player ID."

@@ -59,6 +59,14 @@ class GameSession:
     def game_started(self) -> bool:
         return self.game is not None
 
+    def reset(self) -> None:
+        """Return the in-memory session to its initial empty state."""
+
+        with self._lock:
+            self._players.clear()
+            self._players_by_id.clear()
+            self.game = None
+
     def join(self, name: str) -> JoinPlayerResponse:
         """Join the session and start the game when player two arrives."""
 
