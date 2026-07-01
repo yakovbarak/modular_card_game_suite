@@ -5,6 +5,7 @@ from modular_card_game_suite.client.renderer import (
     format_game_over,
     format_hand,
     format_status,
+    format_waiting_for_replacement,
 )
 
 
@@ -26,6 +27,9 @@ def player_state(**overrides: object) -> PlayerState:
         "game_over": False,
         "winner_display_name": None,
         "last_opponent_action": "Olga drew a card.",
+        "session_status": "active",
+        "message": None,
+        "available_session_actions": [],
     }
     return cast(PlayerState, state | overrides)
 
@@ -63,3 +67,17 @@ def test_game_over_message_for_loser() -> None:
     )
 
     assert rendered == "Game over. Olga (Player 2) won."
+
+
+def test_waiting_for_replacement_message_explains_blocked_session() -> None:
+    rendered = format_waiting_for_replacement(
+        player_state(
+            session_status="waiting_for_replacement",
+            message="Olga (Player 2) quit the game.",
+            available_session_actions=["reset_session", "wait_for_replacement"],
+        )
+    )
+
+    assert "Olga (Player 2) quit the game." in rendered
+    assert "This game cannot continue with one player." in rendered
+    assert "Waiting for a replacement player..." in rendered

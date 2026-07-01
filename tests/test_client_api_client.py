@@ -63,6 +63,8 @@ def response_for(url: str) -> bytes:
             + state_response()
             + b"}"
         )
+    if url.endswith("/quit"):
+        return b'{"status":"quit","message":"You quit the game."}'
     raise AssertionError(f"Unexpected URL {url}")
 
 
@@ -130,6 +132,16 @@ def test_draw_call(requests_seen: list[tuple[str, str, bytes | None]]) -> None:
     assert response["message"] == "You drew 7 of Spades from the deck."
     assert requests_seen[0][0] == "POST"
     assert requests_seen[0][1].endswith("/players/player-one-token/actions/draw")
+
+
+def test_quit_call(requests_seen: list[tuple[str, str, bytes | None]]) -> None:
+    client = ApiClient("http://example.test")
+
+    response = client.quit_player("player-one-token")
+
+    assert response == {"status": "quit", "message": "You quit the game."}
+    assert requests_seen[0][0] == "POST"
+    assert requests_seen[0][1].endswith("/players/player-one-token/quit")
 
 
 def test_server_error_response_becomes_clean_client_error(

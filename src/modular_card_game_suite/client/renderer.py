@@ -60,6 +60,22 @@ def format_waiting() -> str:
     return "Waiting for opponent..."
 
 
+def format_waiting_for_replacement(state: PlayerState) -> str:
+    """Format the blocked-session replacement wait message."""
+
+    lines: list[str] = []
+    if state["message"]:
+        lines.append(state["message"])
+    lines.extend(
+        [
+            "This game cannot continue with one player.",
+            "Waiting for a replacement player...",
+            "Type Ctrl+C to exit, or reset the session from another terminal.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def format_game_over(state: PlayerState) -> str:
     """Format a game-over message from the current player's perspective."""
 
