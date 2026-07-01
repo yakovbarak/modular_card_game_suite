@@ -87,3 +87,30 @@
 * Future games should implement the game interface.
 * The future host-or-join launcher flow belongs in an application/launcher
   layer, not inside game rules, deck modules, or the core game protocol.
+
+## Approved Sprint 8 Decisions
+
+* Player quit and replacement orchestration is session/server/application-layer
+  behavior, not ClownGame rule behavior.
+* The server exposes `POST /players/{player_id}/quit` so clients can notify the
+  session before exiting.
+* A player who quits is removed from the active player-ID map. The old quitter
+  ID is invalid for state and action endpoints.
+* Games may later define whether they can continue after player departure.
+* ClownGame currently requires exactly two active players and cannot continue
+  after one player leaves.
+* When a player quits an active ClownGame, the one-session MVP enters
+  `waiting_for_replacement` state instead of leaving the remaining player in a
+  silent normal turn wait.
+* The remaining player's state includes a session-layer message and available
+  session actions so clients can show reset/wait options.
+* `POST /session/reset` remains the close/reset path from the blocked
+  replacement-wait state.
+* A replacement may join while the session is waiting for replacement.
+* Replacement join starts a fresh ClownGame with the remaining player and the
+  replacement player. It does not resume the old game state.
+* The remaining player's player ID is preserved through replacement when
+  practical; the replacement receives a new player ID in the vacated player
+  slot.
+* Player replacement is not save/load, reconnect/resume, authentication,
+  multiple-session support, or WebSocket/push support.

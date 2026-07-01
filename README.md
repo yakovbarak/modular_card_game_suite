@@ -3,8 +3,8 @@
 Modular Card Game Suite is a Python project that will grow into a modular suite
 for card games, decks, local servers, and clients. The current MVP provides a
 terminal-based ClownGame with one local FastAPI server process, two terminal
-clients using HTTP polling, session reset, and a minimal reusable game
-interface for future game implementations.
+clients using HTTP polling, session reset, player quit/replacement handling,
+and a minimal reusable game interface for future game implementations.
 
 ## Python Version
 
@@ -69,6 +69,24 @@ players and game state, and old player IDs become invalid. Existing terminal
 clients should be restarted after a reset. Reset is not save/load, reconnect,
 resume, authentication, or multiple-session support.
 
+Players can also leave the active session explicitly:
+
+```powershell
+Invoke-RestMethod -Method Post http://127.0.0.1:8000/players/<player-id>/quit
+```
+
+When a player quits an active ClownGame, the quitter's player ID becomes
+invalid and the remaining player sees that the opponent quit. ClownGame cannot
+continue with one player, so the session waits for a replacement player by
+default. The remaining player may keep waiting or reset the session with
+`POST /session/reset`.
+
+If a replacement player joins while the session is waiting for replacement, the
+old game state is discarded and a fresh ClownGame starts with the remaining
+player and the replacement player. Cards, turn, face-up card, score, and other
+old game state are not preserved. This replacement flow is not save/load or
+true reconnect/resume.
+
 ### 2. Start Client 1
 
 Open a second terminal window and run:
@@ -112,7 +130,7 @@ During your turn, the client shows `Play your turn >` and accepts:
 * `play {index}`: play a one-based hand index such as `play 1`. The client
   translates this to the server API's zero-based index.
 * `draw`: draw a card or skip if no cards are available.
-* `quit`: exit the client.
+* `quit`: notify the server when possible, then exit the client.
 
 Illegal commands and illegal moves are recoverable during turn mode. The client
 shows the error and keeps the player at the turn prompt so another command can
@@ -120,6 +138,11 @@ be tried. Fatal errors, such as an unreachable server or an invalid unexpected
 server response, still exit cleanly. If the server session is reset while a
 client is running, the old player ID becomes invalid; the client shows a clean
 restart message and exits.
+
+If an opponent quits while a client is waiting, the client prints that the
+opponent quit, explains that ClownGame cannot continue with one player, and
+continues polling for a replacement. When a replacement joins, the waiting
+client automatically transitions into the fresh game state.
 
 ## Tests
 
@@ -162,6 +185,7 @@ python -m mypy src
 * Exactly one active in-memory game session per server process.
 * Session reset clears the one in-memory MVP session but does not preserve or
   resume existing clients.
+* Player replacement starts a fresh game instead of resuming the old game.
 * No reconnect/resume.
 * No save/load.
 * Run the server as one Uvicorn worker/process because session state is held in
