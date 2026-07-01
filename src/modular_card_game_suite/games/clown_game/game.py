@@ -11,11 +11,14 @@ from modular_card_game_suite.games.clown_game.errors import (
     GameOverError,
     IllegalMoveError,
     InvalidCardIndexError,
+    InvalidGameActionError,
     InvalidPlayerError,
     NotPlayerTurnError,
 )
 from modular_card_game_suite.games.common import (
     CardView,
+    GameAction,
+    GameActionResult,
     Player,
     PlayerView,
     PublicEvent,
@@ -179,6 +182,52 @@ class ClownGame:
         self._switch_turn()
         return drawn_card
 
+    def submit_action(
+        self,
+        player_index: int,
+        action: GameAction,
+    ) -> GameActionResult[PlayerView]:
+        """Apply one adapter-facing action without exposing endpoint details."""
+
+        if action.action_type == "play_card":
+            hand_index = _require_int_payload(action, "hand_index")
+            played_card = self.play_card(player_index, hand_index)
+            message = (
+                "You Won!!!"
+                if self.winner_index == player_index
+                else f"You played {played_card.display_name}."
+            )
+            return GameActionResult(
+                action_type=action.action_type,
+                player_index=player_index,
+                message=message,
+                view=self.get_player_view(player_index),
+                payload={"card_display_name": played_card.display_name},
+            )
+
+        if action.action_type == "draw_card":
+            drawn_card = self.draw_card(player_index)
+            message = (
+                "No cards available to draw. Your turn was skipped."
+                if drawn_card is None
+                else f"You drew {drawn_card.display_name} from the deck."
+            )
+            return GameActionResult(
+                action_type=action.action_type,
+                player_index=player_index,
+                message=message,
+                view=self.get_player_view(player_index),
+                payload={
+                    "card_display_name": (
+                        None if drawn_card is None else drawn_card.display_name
+                    )
+                },
+            )
+
+        raise InvalidGameActionError(
+            f"Unsupported ClownGame action '{action.action_type}'."
+        )
+
     def get_player_view(self, player_index: int) -> PlayerView:
         player = self._get_player(player_index)
         opponent = self.players[1 - player.index]
@@ -283,3 +332,12 @@ class ClownGame:
         if self.current_player_index is None:
             raise GameNotStartedError("ClownGame has not started.")
         return self.current_player_index
+
+
+def _require_int_payload(action: GameAction, key: str) -> int:
+    value = action.payload.get(key)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise InvalidGameActionError(
+            f"Action '{action.action_type}' requires integer payload field '{key}'."
+        )
+    return value

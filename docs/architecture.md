@@ -62,3 +62,28 @@
   functionality.
 * Reset does not provide save/load, reconnect/resume, multiple sessions,
   WebSockets, authentication, or an admin UI.
+
+## Approved Sprint 7 Decisions
+
+* A minimal reusable game interface/protocol exists in the shared game-domain
+  module.
+* The interface includes `Game`, `GameView`, `GameAction`,
+  `GameActionResult`, and a shared `GameError` base.
+* `GameAction` carries an action type plus a generic payload so adapters can
+  submit actions without hard-coding endpoint details into game rules.
+* `GameView` exposes only minimal common adapter signals: turn ownership,
+  game-over status, winner display name, and latest public opponent action.
+* ClownGame conforms to the game protocol and implements `submit_action()` for
+  its current `play_card` and `draw_card` actions.
+* Adapters should interact with games through the interface where practical.
+  The current server session now translates existing ClownGame-shaped HTTP
+  endpoints into internal `GameAction` requests.
+* Common reusable game-domain concepts belong in shared modules such as
+  `modular_card_game_suite.games.common`.
+* Game-specific concepts remain inside game modules. ClownGame-specific fields
+  such as face-up card, draw-deck count, playable hand cards, and opponent card
+  count remain in the ClownGame view used by the MVP API.
+* The current server API remains ClownGame-shaped for MVP compatibility.
+* Future games should implement the game interface.
+* The future host-or-join launcher flow belongs in an application/launcher
+  layer, not inside game rules, deck modules, or the core game protocol.

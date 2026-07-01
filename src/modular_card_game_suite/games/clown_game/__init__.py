@@ -7,6 +7,7 @@ from modular_card_game_suite.games.clown_game.errors import (
     GameOverError,
     IllegalMoveError,
     InvalidCardIndexError,
+    InvalidGameActionError,
     InvalidPlayerError,
     NotPlayerTurnError,
 )
@@ -27,6 +28,7 @@ __all__ = [
     "GameOverError",
     "IllegalMoveError",
     "InvalidCardIndexError",
+    "InvalidGameActionError",
     "InvalidPlayerError",
     "NotPlayerTurnError",
     "Player",
