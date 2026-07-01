@@ -22,6 +22,7 @@ from modular_card_game_suite.client.renderer import (
     format_status,
     format_turn_summary,
     format_waiting,
+    format_waiting_for_replacement,
 )
 
 POLL_INTERVAL_SECONDS = 1
@@ -93,6 +94,7 @@ def run_client(
                     continue
 
                 if command.name == "quit":
+                    _notify_quit(api_client, player_id)
                     return 0
                 if command.name == "help":
                     output_func(format_help())
@@ -142,6 +144,7 @@ def _wait_for_turn(
     poll_interval_seconds: float,
 ) -> PlayerState:
     waiting_message_printed = False
+    last_session_status: str | None = None
     while True:
         try:
             state = api_client.get_state(player_id)
@@ -151,11 +154,25 @@ def _wait_for_turn(
             raise
         if state["game_over"] or state["is_your_turn"]:
             return state
+        if state["session_status"] == "waiting_for_replacement":
+            if last_session_status != "waiting_for_replacement":
+                output_func(format_waiting_for_replacement(state))
+                last_session_status = "waiting_for_replacement"
+            sleep_func(poll_interval_seconds)
+            continue
         if not waiting_message_printed:
             output_func(format_waiting())
             waiting_message_printed = True
+            last_session_status = state["session_status"]
         sleep_func(poll_interval_seconds)
 
 
 def _is_session_invalid(error: ApiError) -> bool:
     return str(error) == "Unknown player ID."
+
+
+def _notify_quit(api_client: ApiClient, player_id: str) -> None:
+    try:
+        api_client.quit_player(player_id)
+    except ClientError:
+        return

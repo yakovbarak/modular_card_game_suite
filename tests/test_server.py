@@ -245,6 +245,119 @@ def test_third_player_and_join_after_start_are_rejected(client: TestClient) -> N
     }
 
 
+def test_active_player_can_quit_and_remaining_player_sees_blocked_state(
+    client: TestClient,
+) -> None:
+    first, second = join_two_players(client)
+
+    quit_response = client.post(f"/players/{second['player_id']}/quit")
+    quitter_state = client.get(f"/players/{second['player_id']}/state")
+    remaining_state_response = client.get(f"/players/{first['player_id']}/state")
+    remaining_play = client.post(
+        f"/players/{first['player_id']}/actions/play",
+        json={"hand_index": 0},
+    )
+    quitter_draw = client.post(f"/players/{second['player_id']}/actions/draw")
+
+    assert quit_response.status_code == 200
+    assert quit_response.json() == {
+        "status": "quit",
+        "message": "You quit the game.",
+    }
+    assert quitter_state.status_code == 404
+    assert quitter_draw.status_code == 404
+    assert remaining_play.status_code == 409
+    assert "replacement player joins" in remaining_play.json()["detail"]
+
+    assert remaining_state_response.status_code == 200
+    remaining_state = remaining_state_response.json()
+    assert remaining_state["session_status"] == "waiting_for_replacement"
+    assert remaining_state["message"] == "Bob (Player 2) quit the game."
+    assert remaining_state["available_session_actions"] == [
+        "reset_session",
+        "wait_for_replacement",
+    ]
+    assert remaining_state["is_your_turn"] is False
+    assert remaining_state["game_started"] is False
+
+
+def test_replacement_join_starts_fresh_game_and_invalidates_quitter(
+    client: TestClient,
+    session: GameSession,
+) -> None:
+    first, second = join_two_players(client)
+    old_game = session.game
+    assert old_game is not None
+    old_game.current_face_up_card = card(RegularRank.SEVEN, RegularSuit.HEARTS)
+    old_game.players[0].hand = [card(RegularRank.THREE, RegularSuit.HEARTS)]
+
+    client.post(f"/players/{second['player_id']}/quit")
+    replacement = client.post("/players", json={"name": "Dana"})
+
+    assert replacement.status_code == 201
+    assert replacement.json() == {
+        "player_id": "player-three-token",
+        "display_name": "Dana (Player 2)",
+        "player_index": 1,
+        "game_started": True,
+    }
+    assert session.game is not None
+    assert session.game is not old_game
+
+    remaining_state = client.get(f"/players/{first['player_id']}/state").json()
+    replacement_state = client.get("/players/player-three-token/state").json()
+    assert remaining_state["display_name"] == "Alice (Player 1)"
+    assert remaining_state["opponent_display_name"] == "Dana (Player 2)"
+    assert replacement_state["display_name"] == "Dana (Player 2)"
+    assert replacement_state["opponent_display_name"] == "Alice (Player 1)"
+    assert remaining_state["session_status"] == "active"
+    assert remaining_state["message"] is None
+    assert remaining_state["current_face_up_card"] != "7 of Hearts"
+    assert len(remaining_state["hand"]) == 8
+    assert client.get(f"/players/{second['player_id']}/state").status_code == 404
+
+    current_player_id = (
+        first["player_id"]
+        if remaining_state["is_your_turn"]
+        else replacement.json()["player_id"]
+    )
+    assert client.post(f"/players/{current_player_id}/actions/draw").status_code == 200
+
+
+def test_replacement_join_keeps_duplicate_names_clear(client: TestClient) -> None:
+    first, second = client.post("/players", json={"name": "Yakov"}).json(), client.post(
+        "/players", json={"name": "Olga"}
+    ).json()
+
+    client.post(f"/players/{second['player_id']}/quit")
+    replacement = client.post("/players", json={"name": "Yakov"})
+
+    assert replacement.status_code == 201
+    assert replacement.json()["display_name"] == "Yakov (Player 2)"
+    state = client.get(f"/players/{first['player_id']}/state").json()
+    assert state["display_name"] == "Yakov (Player 1)"
+    assert state["opponent_display_name"] == "Yakov (Player 2)"
+
+
+def test_reset_from_waiting_for_replacement_clears_old_players(
+    client: TestClient,
+) -> None:
+    first, second = join_two_players(client)
+    client.post(f"/players/{second['player_id']}/quit")
+
+    reset_response = client.post("/session/reset")
+    stale_remaining = client.get(f"/players/{first['player_id']}/state")
+    new_first = client.post("/players", json={"name": "Carol"})
+    new_second = client.post("/players", json={"name": "Eli"})
+
+    assert reset_response.status_code == 200
+    assert stale_remaining.status_code == 404
+    assert new_first.status_code == 201
+    assert new_first.json()["display_name"] == "Carol (Player 1)"
+    assert new_second.status_code == 201
+    assert new_second.json()["display_name"] == "Eli (Player 2)"
+
+
 def test_invalid_player_state_is_rejected(client: TestClient) -> None:
     response = client.get("/players/not-a-player/state")
 

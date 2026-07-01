@@ -24,12 +24,14 @@ from modular_card_game_suite.server.models import (
     JoinPlayerRequest,
     JoinPlayerResponse,
     PlayCardRequest,
+    PlayerQuitResponse,
     PlayerStateResponse,
     SessionResetResponse,
 )
 from modular_card_game_suite.server.session import (
     GameNotReadyError,
     GameSession,
+    SessionBlockedError,
     SessionFullError,
     UnknownPlayerError,
 )
@@ -103,6 +105,19 @@ def create_app(
             raise _http_error(error) from error
 
     @app.post(
+        "/players/{player_id}/quit",
+        response_model=PlayerQuitResponse,
+    )
+    def quit_player(player_id: str) -> PlayerQuitResponse:
+        try:
+            response = active_session.quit(player_id)
+        except UnknownPlayerError as error:
+            raise _http_error(error) from error
+
+        app.state.logger.info("Player quit: player_id=%s", player_id)
+        return response
+
+    @app.post(
         "/players/{player_id}/actions/play",
         response_model=ActionResponse,
     )
@@ -111,6 +126,7 @@ def create_app(
             response = active_session.play(player_id, request.hand_index)
         except (
             UnknownPlayerError,
+            SessionBlockedError,
             GameNotReadyError,
             GameOverError,
             NotPlayerTurnError,
@@ -137,6 +153,7 @@ def create_app(
             response = active_session.draw(player_id)
         except (
             UnknownPlayerError,
+            SessionBlockedError,
             GameNotReadyError,
             GameOverError,
             NotPlayerTurnError,
@@ -155,7 +172,7 @@ def _http_error(error: Exception) -> HTTPException:
         status_code = status.HTTP_404_NOT_FOUND
     elif isinstance(
         error,
-        (GameNotReadyError, GameOverError, NotPlayerTurnError),
+        (SessionBlockedError, GameNotReadyError, GameOverError, NotPlayerTurnError),
     ):
         status_code = status.HTTP_409_CONFLICT
     else:

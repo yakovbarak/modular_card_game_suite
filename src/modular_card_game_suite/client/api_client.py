@@ -49,6 +49,9 @@ class PlayerState(TypedDict):
     game_over: bool
     winner_display_name: str | None
     last_opponent_action: str | None
+    session_status: str
+    message: str | None
+    available_session_actions: list[str]
 
 
 class JoinResponse(TypedDict):
@@ -71,6 +74,13 @@ class HealthResponse(TypedDict):
     """Health response returned by the server."""
 
     status: str
+
+
+class QuitResponse(TypedDict):
+    """Quit response returned by the server."""
+
+    status: str
+    message: str
 
 
 class ErrorResponse(TypedDict):
@@ -129,6 +139,12 @@ class ApiClient:
 
         payload = self._request("POST", f"players/{player_id}/actions/draw")
         return _as_action_response(payload)
+
+    def quit_player(self, player_id: str) -> QuitResponse:
+        """Notify the server that this player is leaving."""
+
+        payload = self._request("POST", f"players/{player_id}/quit")
+        return _as_quit_response(payload)
 
     def _request(
         self,
@@ -210,6 +226,11 @@ def _as_player_state(payload: dict[str, Any]) -> PlayerState:
             "game_over": bool(payload["game_over"]),
             "winner_display_name": _optional_str(payload["winner_display_name"]),
             "last_opponent_action": _optional_str(payload["last_opponent_action"]),
+            "session_status": str(payload.get("session_status", "active")),
+            "message": _optional_str(payload.get("message")),
+            "available_session_actions": _as_string_list(
+                payload.get("available_session_actions", [])
+            ),
         }
     except (KeyError, TypeError, ValueError) as error:
         raise ServerResponseError("Invalid state response from server.") from error
@@ -241,5 +262,21 @@ def _as_action_response(payload: dict[str, Any]) -> ActionResponse:
         raise ServerResponseError("Invalid action response from server.") from error
 
 
+def _as_quit_response(payload: dict[str, Any]) -> QuitResponse:
+    try:
+        return {
+            "status": str(payload["status"]),
+            "message": str(payload["message"]),
+        }
+    except KeyError as error:
+        raise ServerResponseError("Invalid quit response from server.") from error
+
+
 def _optional_str(value: object) -> str | None:
     return None if value is None else str(value)
+
+
+def _as_string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        raise ServerResponseError("Invalid state response from server.")
+    return [str(item) for item in value]

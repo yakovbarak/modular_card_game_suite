@@ -18,6 +18,7 @@ class FakeApiClient:
     def __init__(self) -> None:
         self.play_indexes: list[int] = []
         self.draw_calls = 0
+        self.quit_calls = 0
 
     def health_check(self) -> bool:
         return True
@@ -46,6 +47,11 @@ class FakeApiClient:
     def draw_card(self, player_id: str) -> ActionResponse:
         raise AssertionError("draw_card should not be called")
 
+    def quit_player(self, player_id: str) -> dict[str, str]:
+        assert player_id == "player-one-token"
+        self.quit_calls += 1
+        return {"status": "quit", "message": "You quit the game."}
+
 
 def turn_state(**overrides: object) -> PlayerState:
     state = {
@@ -61,6 +67,9 @@ def turn_state(**overrides: object) -> PlayerState:
         "game_over": False,
         "winner_display_name": None,
         "last_opponent_action": None,
+        "session_status": "active",
+        "message": None,
+        "available_session_actions": [],
     }
     return cast(PlayerState, state | overrides)
 
@@ -79,8 +88,26 @@ def test_run_client_joins_plays_then_quits_without_prompting_while_waiting() -> 
 
     assert result == 0
     assert api_client.play_indexes == [0]
+    assert api_client.quit_calls == 1
     assert "Joined as Yakov (Player 1)." in output
     assert "You played 9 of Clubs." in output
+
+
+def test_run_client_exits_cleanly_when_quit_notification_fails() -> None:
+    class QuitRejectedApiClient(FakeApiClient):
+        def quit_player(self, player_id: str) -> dict[str, str]:
+            raise ApiError("Unknown player ID.")
+
+    inputs = iter(["Yakov", "quit"])
+    output: list[str] = []
+
+    result = run_client(
+        QuitRejectedApiClient(),  # type: ignore[arg-type]
+        input_func=lambda prompt: next(inputs),
+        output_func=output.append,
+    )
+
+    assert result == 0
 
 
 def test_run_client_continues_turn_after_api_rejects_command() -> None:
@@ -357,6 +384,53 @@ def test_run_client_waits_until_turn() -> None:
     assert result == 0
     assert "Waiting for opponent..." in output
     assert sleeps == [1]
+
+
+def test_run_client_displays_opponent_quit_while_waiting() -> None:
+    class OpponentQuitApiClient(FakeApiClient):
+        def __init__(self) -> None:
+            super().__init__()
+            self.states = iter(
+                [
+                    turn_state(is_your_turn=False),
+                    turn_state(
+                        is_your_turn=False,
+                        game_started=False,
+                        session_status="waiting_for_replacement",
+                        message="Olga (Player 2) quit the game.",
+                        available_session_actions=[
+                            "reset_session",
+                            "wait_for_replacement",
+                        ],
+                    ),
+                    turn_state(is_your_turn=True),
+                ]
+            )
+
+        def get_state(self, player_id: str) -> PlayerState:
+            return next(self.states)
+
+    inputs = iter(["Yakov", "quit"])
+    output: list[str] = []
+    sleeps: list[float] = []
+
+    result = run_client(
+        OpponentQuitApiClient(),  # type: ignore[arg-type]
+        input_func=lambda prompt: next(inputs),
+        output_func=output.append,
+        sleep_func=sleeps.append,
+    )
+
+    assert result == 0
+    assert "Waiting for opponent..." in output
+    blocked_messages = [
+        message
+        for message in output
+        if "Olga (Player 2) quit the game." in message
+    ]
+    assert len(blocked_messages) == 1
+    assert "Waiting for a replacement player..." in blocked_messages[0]
+    assert sleeps == [1, 1]
 
 
 def test_run_client_reports_opponent_win() -> None:

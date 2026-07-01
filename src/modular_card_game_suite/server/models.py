@@ -49,6 +49,9 @@ class PlayerStateResponse(BaseModel):
     game_over: bool
     winner_display_name: str | None
     last_opponent_action: str | None
+    session_status: str = "active"
+    message: str | None = None
+    available_session_actions: list[str] = Field(default_factory=list)
 
 
 class PlayCardRequest(BaseModel):
@@ -72,6 +75,13 @@ class HealthResponse(BaseModel):
 
 class SessionResetResponse(BaseModel):
     """Result of resetting the active in-memory session."""
+
+    status: str
+    message: str
+
+
+class PlayerQuitResponse(BaseModel):
+    """Result of a player leaving the active in-memory session."""
 
     status: str
     message: str
